@@ -1,1 +1,7 @@
 /node_modules/
+
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
