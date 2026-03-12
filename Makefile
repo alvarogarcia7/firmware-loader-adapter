@@ -97,3 +97,12 @@ coverage: ## Generate code coverage (requires tarpaulin)
 expand: ## Expand macros (useful for debugging)
 	cargo expand
 .PHONY: expand
+
+init:
+	${MAKE} setup-hooks
+.PHONY: init
+
+setup-hooks: ## Install pre-commit hooks using prek
+	@command -v prek >/dev/null 2>&1 || { echo >&2 "prek is not installed. Install it with: cargo install --root $PWD prek"; exit 1; }
+	prek install
+.PHONY: setup-hooks

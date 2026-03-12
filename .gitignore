@@ -33,3 +33,8 @@ Thumbs.db
 credentials.json
 session.json
 config.toml
+
+# Prek Local install
+/bin/
+.crates.toml
+.crates2.json
