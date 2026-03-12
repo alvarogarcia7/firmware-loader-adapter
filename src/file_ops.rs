@@ -1,13 +1,48 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use anyhow::{Context, Result};
+use sha2::{Sha256, Digest};
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct FileMetadata {
+    pub path: PathBuf,
+    pub size: u64,
+    pub modified: SystemTime,
+    pub is_file: bool,
+}
 
 #[allow(dead_code)]
 pub struct FileOperations;
 
 #[allow(dead_code)]
 impl FileOperations {
+    pub async fn list_directory(path: &Path) -> Result<Vec<FileMetadata>> {
+        let mut entries = Vec::new();
+        
+        let mut dir = tokio::fs::read_dir(path)
+            .await
+            .context("Failed to read directory")?;
+
+        while let Some(entry) = dir.next_entry().await.context("Failed to read directory entry")? {
+            let metadata = entry.metadata().await.context("Failed to get entry metadata")?;
+            let path = entry.path();
+            
+            let file_metadata = FileMetadata {
+                path,
+                size: metadata.len(),
+                modified: metadata.modified().context("Failed to get modified time")?,
+                is_file: metadata.is_file(),
+            };
+            
+            entries.push(file_metadata);
+        }
+
+        Ok(entries)
+    }
+
     pub async fn read_file(path: &Path) -> Result<Vec<u8>> {
         let mut file = File::open(path)
             .await
@@ -21,10 +56,71 @@ impl FileOperations {
         Ok(contents)
     }
 
+    pub async fn read_file_chunked<F>(path: &Path, chunk_size: usize, mut callback: F) -> Result<()>
+    where
+        F: FnMut(&[u8]) -> Result<()>,
+    {
+        let mut file = File::open(path)
+            .await
+            .context("Failed to open file for reading")?;
+
+        let mut buffer = vec![0u8; chunk_size];
+
+        loop {
+            let bytes_read = file.read(&mut buffer)
+                .await
+                .context("Failed to read chunk from file")?;
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            callback(&buffer[..bytes_read])?;
+        }
+
+        Ok(())
+    }
+
     pub async fn read_chunk(file: &mut File, buffer: &mut [u8]) -> Result<usize> {
         file.read(buffer)
             .await
             .context("Failed to read chunk from file")
+    }
+
+    pub async fn compute_sha256(path: &Path) -> Result<String> {
+        let mut file = File::open(path)
+            .await
+            .context("Failed to open file for hashing")?;
+
+        let mut hasher = Sha256::new();
+        let mut buffer = vec![0u8; 8192];
+
+        loop {
+            let bytes_read = file.read(&mut buffer)
+                .await
+                .context("Failed to read file for hashing")?;
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            hasher.update(&buffer[..bytes_read]);
+        }
+
+        let result = hasher.finalize();
+        Ok(hex::encode(result))
+    }
+
+    pub async fn verify_sha256(path: &Path, expected_hash: &str) -> Result<bool> {
+        let computed_hash = Self::compute_sha256(path).await?;
+        Ok(computed_hash.eq_ignore_ascii_case(expected_hash))
+    }
+
+    pub async fn compute_sha256_bytes(data: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        let result = hasher.finalize();
+        hex::encode(result)
     }
 
     pub async fn write_file(path: &Path, data: &[u8]) -> Result<()> {
