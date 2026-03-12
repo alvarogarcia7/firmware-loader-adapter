@@ -1,0 +1,67 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+
+jobs:
+  build-test-quality:
+    name: Build, Test & Quality Checks
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        rust-version: [stable]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust ${{ matrix.rust-version }}
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust-version }}
+          components: rustfmt, clippy
+      
+      # - name: Setup sccache
+      #   uses: mozilla-actions/sccache-action@v0.0.4
+      
+      # - name: Configure sccache
+      #   run: |
+      #     echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      #     echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+      
+      - name: Build project
+        run: cargo build --verbose
+      
+      - name: Run tests
+        run: cargo test --verbose
+      
+      - name: Run quality checks - Format
+        run: cargo fmt -- --check
+      
+      - name: Run quality checks - Clippy
+        run: cargo clippy -- -D warnings
+      
+      - name: Build release
+        if: matrix.rust-version == 'stable'
+        run: cargo build --release --verbose
+      
+      - name: Upload build artifacts
+        if: matrix.rust-version == 'stable'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binary
+          path: target/release/
+          if-no-files-found: ignore
+      
+      # - name: Print sccache stats
+      #   run: sccache --show-stats

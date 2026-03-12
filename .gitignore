@@ -1,7 +1,29 @@
 /node_modules/
 
-# Rust
-target/
-Cargo.lock
+# Rust build outputs
+/target/
 **/*.rs.bk
 *.pdb
+
+# Cargo
+Cargo.lock
+.cargo/
+
+# Test coverage
+/coverage/
+/.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

@@ -1,0 +1,124 @@
+image: rust:latest
+
+stages:
+  - build
+  - test
+  - quality
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  SCCACHE_DIR: $CI_PROJECT_DIR/.sccache
+  SCCACHE_CACHE_SIZE: 2G
+  RUSTC_WRAPPER: sccache
+
+cache:
+  paths:
+    - .cargo/
+    - .sccache/
+
+before_script:
+  - rustc --version
+  - cargo --version
+  - cargo install sccache --locked || true
+  - export PATH="$CARGO_HOME/bin:$PATH"
+  - sccache --start-server || true
+  - sccache --show-stats
+
+after_script:
+  - sccache --show-stats
+
+build:
+  stage: build
+  script:
+    - cargo build --verbose
+  artifacts:
+    paths:
+      - target/debug/
+    expire_in: 1 hour
+  only:
+    - main
+    - master
+    - develop
+    - merge_requests
+
+build:release:
+  stage: build
+  script:
+    - cargo build --release --verbose
+  artifacts:
+    paths:
+      - target/release/
+    expire_in: 1 week
+  only:
+    - main
+    - master
+    - merge_requests
+
+test:
+  stage: test
+  script:
+    - cargo test --verbose
+  coverage: '/^\s*lines:\s*\d+\.\d+\%/'
+  artifacts:
+    reports:
+      junit: target/test-results.xml
+    paths:
+      - target/debug/
+    expire_in: 1 week
+  only:
+    - main
+    - master
+    - develop
+    - merge_requests
+
+quality:format:
+  stage: quality
+  before_script:
+    - rustup component add rustfmt
+  script:
+    - cargo fmt -- --check
+  allow_failure: false
+  only:
+    - main
+    - master
+    - develop
+    - merge_requests
+
+quality:clippy:
+  stage: quality
+  before_script:
+    - rustup component add clippy
+    - cargo install sccache --locked || true
+    - export PATH="$CARGO_HOME/bin:$PATH"
+    - export RUSTC_WRAPPER=sccache
+    - sccache --start-server || true
+  script:
+    - cargo clippy -- -D warnings
+  allow_failure: false
+  only:
+    - main
+    - master
+    - develop
+    - merge_requests
+
+# Multi-version testing
+test:rust-stable:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo test --verbose
+  only:
+    - main
+    - master
+    - merge_requests
+
+test:rust-beta:
+  stage: test
+  image: rust:beta
+  script:
+    - cargo test --verbose
+  allow_failure: true
+  only:
+    - main
+    - master
+    - merge_requests

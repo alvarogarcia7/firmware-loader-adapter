@@ -1,4 +1,11 @@
 {
+  "name": "adapter",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0",
+    "lint": "echo \"No linter configured\" && exit 0",
+    "build": "echo \"No build step needed\" && exit 0"
+  },
   "dependencies": {
     "backlog.md": "^1.40.0"
   }
