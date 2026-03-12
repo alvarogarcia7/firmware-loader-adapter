@@ -28,7 +28,7 @@ impl Credentials {
         let salt = SaltString::generate(&mut OsRng);
         let params = Params::new(SCRYPT_LOG_N, SCRYPT_R, SCRYPT_P, KEY_LEN)
             .context("Failed to create scrypt parameters")?;
-        
+
         let password_hash = Scrypt
             .hash_password_customized(password.as_bytes(), None, None, params, &salt)
             .context("Failed to hash password")?
@@ -42,22 +42,26 @@ impl Credentials {
     }
 }
 
-pub fn store_credentials(credentials: &Credentials, password: &str, file_path: &Path) -> Result<()> {
+pub fn store_credentials(
+    credentials: &Credentials,
+    password: &str,
+    file_path: &Path,
+) -> Result<()> {
     let salt = SaltString::generate(&mut OsRng);
     let params = Params::new(SCRYPT_LOG_N, SCRYPT_R, SCRYPT_P, KEY_LEN)
         .context("Failed to create scrypt parameters")?;
-    
+
     let password_hash = Scrypt
         .hash_password_customized(password.as_bytes(), None, None, params, &salt)
         .context("Failed to derive key from password")?;
-    
+
     let hash_output = password_hash.hash.context("No hash generated")?;
     let key_bytes = hash_output.as_bytes();
-    
+
     if key_bytes.len() < KEY_LEN {
         return Err(anyhow::anyhow!("Derived key too short"));
     }
-    
+
     let mut encryption_key = [0u8; KEY_LEN];
     encryption_key.copy_from_slice(&key_bytes[..KEY_LEN]);
 
@@ -65,9 +69,9 @@ pub fn store_credentials(credentials: &Credentials, password: &str, file_path: &
     let nonce_bytes = generate_nonce();
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let credentials_json = serde_json::to_string(credentials)
-        .context("Failed to serialize credentials")?;
-    
+    let credentials_json =
+        serde_json::to_string(credentials).context("Failed to serialize credentials")?;
+
     let encrypted_data = cipher
         .encrypt(nonce, credentials_json.as_bytes())
         .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
@@ -78,48 +82,44 @@ pub fn store_credentials(credentials: &Credentials, password: &str, file_path: &
         encrypted_credentials: hex::encode(&encrypted_data),
     };
 
-    let storage_json = serde_json::to_string_pretty(&storage_data)
-        .context("Failed to serialize storage data")?;
-    
-    fs::write(file_path, storage_json)
-        .context("Failed to write credentials file")?;
+    let storage_json =
+        serde_json::to_string_pretty(&storage_data).context("Failed to serialize storage data")?;
+
+    fs::write(file_path, storage_json).context("Failed to write credentials file")?;
 
     Ok(())
 }
 
 pub fn verify_credentials(username: &str, password: &str, file_path: &Path) -> Result<bool> {
-    let storage_json = fs::read_to_string(file_path)
-        .context("Failed to read credentials file")?;
-    
-    let storage_data: StoredCredentials = serde_json::from_str(&storage_json)
-        .context("Failed to parse storage data")?;
+    let storage_json = fs::read_to_string(file_path).context("Failed to read credentials file")?;
 
-    let salt = SaltString::from_b64(&storage_data.salt)
-        .context("Invalid salt format")?;
-    
+    let storage_data: StoredCredentials =
+        serde_json::from_str(&storage_json).context("Failed to parse storage data")?;
+
+    let salt = SaltString::from_b64(&storage_data.salt).context("Invalid salt format")?;
+
     let params = Params::new(SCRYPT_LOG_N, SCRYPT_R, SCRYPT_P, KEY_LEN)
         .context("Failed to create scrypt parameters")?;
-    
+
     let password_hash = Scrypt
         .hash_password_customized(password.as_bytes(), None, None, params, &salt)
         .context("Failed to derive key from password")?;
-    
+
     let hash_output = password_hash.hash.context("No hash generated")?;
     let key_bytes = hash_output.as_bytes();
-    
+
     if key_bytes.len() < KEY_LEN {
         return Err(anyhow::anyhow!("Derived key too short"));
     }
-    
+
     let mut encryption_key = [0u8; KEY_LEN];
     encryption_key.copy_from_slice(&key_bytes[..KEY_LEN]);
 
     let cipher = Aes256Gcm::new(&encryption_key.into());
-    
-    let nonce_bytes = hex::decode(&storage_data.nonce)
-        .context("Invalid nonce format")?;
+
+    let nonce_bytes = hex::decode(&storage_data.nonce).context("Invalid nonce format")?;
     let nonce = Nonce::from_slice(&nonce_bytes);
-    
+
     let encrypted_data = hex::decode(&storage_data.encrypted_credentials)
         .context("Invalid encrypted data format")?;
 
@@ -127,17 +127,19 @@ pub fn verify_credentials(username: &str, password: &str, file_path: &Path) -> R
         .decrypt(nonce, encrypted_data.as_ref())
         .map_err(|_| anyhow::anyhow!("Decryption failed - invalid password or corrupted data"))?;
 
-    let credentials: Credentials = serde_json::from_slice(&decrypted_data)
-        .context("Failed to parse credentials")?;
+    let credentials: Credentials =
+        serde_json::from_slice(&decrypted_data).context("Failed to parse credentials")?;
 
     if credentials.username != username {
         return Ok(false);
     }
 
-    let stored_hash = PasswordHash::new(&credentials.password_hash)
-        .context("Invalid password hash format")?;
-    
-    Ok(Scrypt.verify_password(password.as_bytes(), &stored_hash).is_ok())
+    let stored_hash =
+        PasswordHash::new(&credentials.password_hash).context("Invalid password hash format")?;
+
+    Ok(Scrypt
+        .verify_password(password.as_bytes(), &stored_hash)
+        .is_ok())
 }
 
 fn generate_nonce() -> [u8; 12] {
@@ -165,18 +167,18 @@ impl AuthManager {
         let salt = SaltString::generate(&mut OsRng);
         let params = Params::new(SCRYPT_LOG_N, SCRYPT_R, SCRYPT_P, KEY_LEN)
             .context("Failed to create scrypt parameters")?;
-        
+
         let password_hash = Scrypt
             .hash_password_customized(password.as_bytes(), None, None, params, &salt)
             .context("Failed to hash password")?;
 
         let hash_bytes = password_hash.hash.context("No hash generated")?;
         let key_bytes = hash_bytes.as_bytes();
-        
+
         if key_bytes.len() < KEY_LEN {
             return Err(anyhow::anyhow!("Derived key too short"));
         }
-        
+
         let mut key = [0u8; 32];
         key.copy_from_slice(&key_bytes[..KEY_LEN]);
 
@@ -187,11 +189,11 @@ impl AuthManager {
         let cipher = Aes256Gcm::new(&self.key.into());
         let nonce_bytes = generate_nonce();
         let nonce = Nonce::from_slice(&nonce_bytes);
-        
+
         let mut encrypted = cipher
             .encrypt(nonce, data)
             .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
-        
+
         let mut result = nonce_bytes.to_vec();
         result.append(&mut encrypted);
         Ok(result)
@@ -201,11 +203,11 @@ impl AuthManager {
         if data.len() < 12 {
             return Err(anyhow::anyhow!("Data too short to contain nonce"));
         }
-        
+
         let (nonce_bytes, encrypted_data) = data.split_at(12);
         let cipher = Aes256Gcm::new(&self.key.into());
         let nonce = Nonce::from_slice(nonce_bytes);
-        
+
         cipher
             .decrypt(nonce, encrypted_data)
             .map_err(|e| anyhow::anyhow!("Decryption failed: {}", e))

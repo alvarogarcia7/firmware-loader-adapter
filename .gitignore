@@ -27,3 +27,9 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Secure Serial Transfer - credentials and session files
+.secure-serial-transfer/
+credentials.json
+session.json
+config.toml

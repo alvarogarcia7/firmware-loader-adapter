@@ -1,9 +1,9 @@
+use anyhow::{Context, Result};
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use anyhow::{Context, Result};
-use sha2::{Sha256, Digest};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -21,22 +21,29 @@ pub struct FileOperations;
 impl FileOperations {
     pub async fn list_directory(path: &Path) -> Result<Vec<FileMetadata>> {
         let mut entries = Vec::new();
-        
+
         let mut dir = tokio::fs::read_dir(path)
             .await
             .context("Failed to read directory")?;
 
-        while let Some(entry) = dir.next_entry().await.context("Failed to read directory entry")? {
-            let metadata = entry.metadata().await.context("Failed to get entry metadata")?;
+        while let Some(entry) = dir
+            .next_entry()
+            .await
+            .context("Failed to read directory entry")?
+        {
+            let metadata = entry
+                .metadata()
+                .await
+                .context("Failed to get entry metadata")?;
             let path = entry.path();
-            
+
             let file_metadata = FileMetadata {
                 path,
                 size: metadata.len(),
                 modified: metadata.modified().context("Failed to get modified time")?,
                 is_file: metadata.is_file(),
             };
-            
+
             entries.push(file_metadata);
         }
 
@@ -67,7 +74,8 @@ impl FileOperations {
         let mut buffer = vec![0u8; chunk_size];
 
         loop {
-            let bytes_read = file.read(&mut buffer)
+            let bytes_read = file
+                .read(&mut buffer)
                 .await
                 .context("Failed to read chunk from file")?;
 
@@ -96,7 +104,8 @@ impl FileOperations {
         let mut buffer = vec![0u8; 8192];
 
         loop {
-            let bytes_read = file.read(&mut buffer)
+            let bytes_read = file
+                .read(&mut buffer)
                 .await
                 .context("Failed to read file for hashing")?;
 

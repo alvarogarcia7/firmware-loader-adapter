@@ -34,7 +34,7 @@ impl Session {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         now - self.timestamp < SESSION_VALIDITY_SECONDS
     }
 }
@@ -49,17 +49,15 @@ impl SessionManager {
     }
 
     pub fn save_session(&self, session: &Session) -> Result<()> {
-        let session_json = serde_json::to_string_pretty(session)
-            .context("Failed to serialize session")?;
-        
+        let session_json =
+            serde_json::to_string_pretty(session).context("Failed to serialize session")?;
+
         if let Some(parent) = self.session_file.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create session directory")?;
+            fs::create_dir_all(parent).context("Failed to create session directory")?;
         }
-        
-        fs::write(&self.session_file, session_json)
-            .context("Failed to write session file")?;
-        
+
+        fs::write(&self.session_file, session_json).context("Failed to write session file")?;
+
         Ok(())
     }
 
@@ -68,12 +66,12 @@ impl SessionManager {
             return Ok(None);
         }
 
-        let session_json = fs::read_to_string(&self.session_file)
-            .context("Failed to read session file")?;
-        
-        let session: Session = serde_json::from_str(&session_json)
-            .context("Failed to parse session data")?;
-        
+        let session_json =
+            fs::read_to_string(&self.session_file).context("Failed to read session file")?;
+
+        let session: Session =
+            serde_json::from_str(&session_json).context("Failed to parse session data")?;
+
         if session.is_valid() {
             Ok(Some(session))
         } else {
@@ -84,8 +82,7 @@ impl SessionManager {
 
     pub fn clear_session(&self) -> Result<()> {
         if self.session_file.exists() {
-            fs::remove_file(&self.session_file)
-                .context("Failed to remove session file")?;
+            fs::remove_file(&self.session_file).context("Failed to remove session file")?;
         }
         Ok(())
     }
@@ -99,9 +96,4 @@ impl SessionManager {
 pub fn get_default_session_path() -> PathBuf {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.join(".secure-serial-transfer").join("session.json")
-}
-
-pub fn get_default_credentials_path() -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.join(".secure-serial-transfer").join("credentials.json")
 }

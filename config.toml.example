@@ -1,0 +1,20 @@
+# Secure Serial Transfer Configuration File
+# Copy this file to ~/.secure-serial-transfer/config.toml and customize as needed
+
+# Default serial port device
+# Linux/macOS examples: /dev/ttyUSB0, /dev/ttyACM0, /dev/tty.usbserial
+# Windows examples: COM3, COM4, COM5
+serial_port = "/dev/ttyUSB0"
+
+# Serial communication baud rate
+# Common values: 9600, 19200, 38400, 57600, 115200, 230400
+baud_rate = 115200
+
+# Default origin folder for file operations
+# Use "." for current directory or specify an absolute path
+origin_folder = "."
+
+# Credentials storage location
+# Default: ~/.secure-serial-transfer/credentials.json
+# Customize if you want to store credentials elsewhere
+credentials_path = "/home/user/.secure-serial-transfer/credentials.json"

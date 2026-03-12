@@ -1,8 +1,8 @@
-use tokio_serial::{SerialStream, SerialPortBuilderExt, DataBits, Parity, StopBits};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::time::{timeout, Duration, sleep};
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::time::{sleep, timeout, Duration};
+use tokio_serial::{DataBits, Parity, SerialPortBuilderExt, SerialStream, StopBits};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -101,10 +101,10 @@ impl RetryConfig {
     }
 
     fn calculate_delay(&self, attempt: u32) -> Duration {
-        let delay_ms = self.initial_delay.as_millis() as f64 
-            * self.backoff_multiplier.powi(attempt as i32);
+        let delay_ms =
+            self.initial_delay.as_millis() as f64 * self.backoff_multiplier.powi(attempt as i32);
         let delay = Duration::from_millis(delay_ms as u64);
-        
+
         if delay > self.max_delay {
             self.max_delay
         } else {
@@ -133,7 +133,11 @@ impl SerialTransfer {
         Self::new_with_retry(port_name, config, RetryConfig::default())
     }
 
-    pub fn new_with_retry(port_name: &str, config: SerialConfig, retry_config: RetryConfig) -> Result<Self> {
+    pub fn new_with_retry(
+        port_name: &str,
+        config: SerialConfig,
+        retry_config: RetryConfig,
+    ) -> Result<Self> {
         let port = tokio_serial::new(port_name, config.baud_rate)
             .data_bits(config.data_bits)
             .parity(config.parity)
@@ -149,8 +153,7 @@ impl SerialTransfer {
     }
 
     pub fn enumerate_ports() -> Result<Vec<PortInfo>> {
-        let ports = tokio_serial::available_ports()
-            .context("Failed to enumerate serial ports")?;
+        let ports = tokio_serial::available_ports().context("Failed to enumerate serial ports")?;
 
         Ok(ports
             .into_iter()
@@ -201,7 +204,7 @@ impl SerialTransfer {
             .context("Failed to read data length")?;
 
         let len = u32::from_be_bytes(len_buf) as usize;
-        
+
         if len == 0 {
             return Err(anyhow!("Received zero-length message"));
         }
@@ -222,14 +225,20 @@ impl SerialTransfer {
     pub async fn send(&mut self, data: &[u8]) -> Result<()> {
         match timeout(self.config.timeout, self.send_internal(data)).await {
             Ok(result) => result,
-            Err(_) => Err(anyhow!("Send operation timed out after {:?}", self.config.timeout)),
+            Err(_) => Err(anyhow!(
+                "Send operation timed out after {:?}",
+                self.config.timeout
+            )),
         }
     }
 
     pub async fn receive(&mut self) -> Result<Vec<u8>> {
         match timeout(self.config.timeout, self.receive_internal()).await {
             Ok(result) => result,
-            Err(_) => Err(anyhow!("Receive operation timed out after {:?}", self.config.timeout)),
+            Err(_) => Err(anyhow!(
+                "Receive operation timed out after {:?}",
+                self.config.timeout
+            )),
         }
     }
 
@@ -300,16 +309,14 @@ impl SerialTransfer {
 
 #[allow(dead_code)]
 pub fn list_available_ports() -> Result<Vec<String>> {
-    let ports = tokio_serial::available_ports()
-        .context("Failed to enumerate serial ports")?;
+    let ports = tokio_serial::available_ports().context("Failed to enumerate serial ports")?;
 
     Ok(ports.into_iter().map(|p| p.port_name).collect())
 }
 
 #[allow(dead_code)]
 pub fn get_port_details() -> Result<HashMap<String, String>> {
-    let ports = tokio_serial::available_ports()
-        .context("Failed to enumerate serial ports")?;
+    let ports = tokio_serial::available_ports().context("Failed to enumerate serial ports")?;
 
     let mut details = HashMap::new();
     for port in ports {
@@ -430,34 +437,33 @@ mod tests {
     #[test]
     fn test_exponential_backoff_calculation() {
         let config = RetryConfig::default();
-        
+
         let delay0 = config.calculate_delay(0);
         assert_eq!(delay0, Duration::from_millis(100));
-        
+
         let delay1 = config.calculate_delay(1);
         assert_eq!(delay1, Duration::from_millis(200));
-        
+
         let delay2 = config.calculate_delay(2);
         assert_eq!(delay2, Duration::from_millis(400));
-        
+
         let delay3 = config.calculate_delay(3);
         assert_eq!(delay3, Duration::from_millis(800));
     }
 
     #[test]
     fn test_exponential_backoff_max_delay() {
-        let config = RetryConfig::default()
-            .with_max_delay(Duration::from_millis(300));
-        
+        let config = RetryConfig::default().with_max_delay(Duration::from_millis(300));
+
         let delay0 = config.calculate_delay(0);
         assert_eq!(delay0, Duration::from_millis(100));
-        
+
         let delay1 = config.calculate_delay(1);
         assert_eq!(delay1, Duration::from_millis(200));
-        
+
         let delay2 = config.calculate_delay(2);
         assert_eq!(delay2, Duration::from_millis(300));
-        
+
         let delay10 = config.calculate_delay(10);
         assert_eq!(delay10, Duration::from_millis(300));
     }

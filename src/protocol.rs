@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use crc::{Crc, CRC_16_IBM_SDLC};
+use serde::{Deserialize, Serialize};
 
 #[allow(dead_code)]
 const PROTOCOL_VERSION: u8 = 1;
@@ -76,14 +76,14 @@ impl Frame {
     pub fn new(message_type: MessageType, payload: MessagePayload) -> Result<Self> {
         let payload_bytes = bincode::serialize(&payload)
             .map_err(|e| anyhow!("Failed to serialize payload: {}", e))?;
-        
+
         let mut frame = Frame {
             version: PROTOCOL_VERSION,
             message_type,
             payload: payload_bytes,
             checksum: 0,
         };
-        
+
         frame.checksum = frame.calculate_checksum();
         Ok(frame)
     }
@@ -94,7 +94,7 @@ impl Frame {
         data.push(self.message_type.to_u8());
         data.extend_from_slice(&(self.payload.len() as u32).to_be_bytes());
         data.extend_from_slice(&self.payload);
-        
+
         CRC16.checksum(&data)
     }
 
@@ -105,17 +105,17 @@ impl Frame {
 
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let mut buffer = Vec::new();
-        
+
         buffer.push(self.version);
         buffer.push(self.message_type.to_u8());
-        
+
         let payload_len = self.payload.len() as u32;
         buffer.extend_from_slice(&payload_len.to_be_bytes());
-        
+
         buffer.extend_from_slice(&self.payload);
-        
+
         buffer.extend_from_slice(&self.checksum.to_be_bytes());
-        
+
         Ok(buffer)
     }
 
@@ -134,7 +134,11 @@ impl Frame {
         let payload_len = u32::from_be_bytes([data[2], data[3], data[4], data[5]]) as usize;
 
         if data.len() < 8 + payload_len {
-            return Err(anyhow!("Incomplete frame: expected {} bytes, got {}", 8 + payload_len, data.len()));
+            return Err(anyhow!(
+                "Incomplete frame: expected {} bytes, got {}",
+                8 + payload_len,
+                data.len()
+            ));
         }
 
         let payload = data[6..6 + payload_len].to_vec();
@@ -181,7 +185,12 @@ impl ProtocolHandler {
         self.chunk_size
     }
 
-    pub fn create_file_start(&self, filename: String, file_size: u64, checksum: Option<String>) -> Result<Frame> {
+    pub fn create_file_start(
+        &self,
+        filename: String,
+        file_size: u64,
+        checksum: Option<String>,
+    ) -> Result<Frame> {
         let payload = MessagePayload::FileStart {
             filename,
             file_size,
@@ -240,11 +249,11 @@ mod tests {
             file_size: 1024,
             checksum: Some("abc123".to_string()),
         };
-        
+
         let frame = Frame::new(MessageType::FileStart, payload).unwrap();
         let serialized = frame.serialize().unwrap();
         let deserialized = Frame::deserialize(&serialized).unwrap();
-        
+
         assert_eq!(frame.version, deserialized.version);
         assert_eq!(frame.message_type, deserialized.message_type);
         assert_eq!(frame.payload, deserialized.payload);
@@ -257,10 +266,10 @@ mod tests {
             sequence: 1,
             data: vec![1, 2, 3, 4, 5],
         };
-        
+
         let frame = Frame::new(MessageType::FileChunk, payload).unwrap();
         assert!(frame.verify_checksum());
-        
+
         let mut corrupted_frame = frame.clone();
         corrupted_frame.payload[0] ^= 0xFF;
         assert!(!corrupted_frame.verify_checksum());
@@ -269,17 +278,20 @@ mod tests {
     #[test]
     fn test_protocol_handler() {
         let handler = ProtocolHandler::new(4096);
-        
-        let frame = handler.create_file_start(
-            "test.txt".to_string(),
-            1024,
-            Some("hash".to_string())
-        ).unwrap();
-        
+
+        let frame = handler
+            .create_file_start("test.txt".to_string(), 1024, Some("hash".to_string()))
+            .unwrap();
+
         let serialized = frame.serialize().unwrap();
         let parsed = handler.parse_frame(&serialized).unwrap();
-        
-        if let MessagePayload::FileStart { filename, file_size, .. } = parsed.extract_payload().unwrap() {
+
+        if let MessagePayload::FileStart {
+            filename,
+            file_size,
+            ..
+        } = parsed.extract_payload().unwrap()
+        {
             assert_eq!(filename, "test.txt");
             assert_eq!(file_size, 1024);
         } else {
@@ -291,11 +303,15 @@ mod tests {
     fn test_ack_frame() {
         let handler = ProtocolHandler::new(4096);
         let frame = handler.create_ack(42, MessageType::FileChunk).unwrap();
-        
+
         let serialized = frame.serialize().unwrap();
         let parsed = Frame::deserialize(&serialized).unwrap();
-        
-        if let MessagePayload::Ack { sequence, message_type } = parsed.extract_payload().unwrap() {
+
+        if let MessagePayload::Ack {
+            sequence,
+            message_type,
+        } = parsed.extract_payload().unwrap()
+        {
             assert_eq!(sequence, 42);
             assert_eq!(message_type, MessageType::FileChunk.to_u8());
         } else {
@@ -307,10 +323,10 @@ mod tests {
     fn test_error_frame() {
         let handler = ProtocolHandler::new(4096);
         let frame = handler.create_error(404, "Not found".to_string()).unwrap();
-        
+
         let serialized = frame.serialize().unwrap();
         let parsed = Frame::deserialize(&serialized).unwrap();
-        
+
         if let MessagePayload::Error { code, message } = parsed.extract_payload().unwrap() {
             assert_eq!(code, 404);
             assert_eq!(message, "Not found");
